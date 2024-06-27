@@ -1,3 +1,10 @@
 <resources>
-    <string name="app_name">StepCounter</string>
+    <string name="app_name">Step Counter</string>
+    <string name="guideline">When preparing to move,
+                            press the start button to start counting steps.
+                            If you stop to rest or have something to do and want to temporarily stop counting steps, press the stop button.
+                            Then, if you want to continue measuring, click the continue button to continue. After finishing or you want to finish,
+                            click the finish button to finish. There are 4 parameters on the screen displayed: the first is the current status,
+                            the second is the number of steps in walking state, the third is jogging status, and the last is running status.
+                            Now, let do it!</string>
 </resources>

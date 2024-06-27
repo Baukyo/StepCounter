@@ -1,22 +1,32 @@
 package com.example.stepcounter;
 
+import android.content.Context;
 import android.os.SystemClock;
+import android.widget.Toast;
+
+import androidx.activity.result.contract.ActivityResultContracts;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 
 public class StepDetector {
-    private static final int WALKINGTHRESHOLD = 13;
-    private static final int JOGGINGTHRESHOLD = 22;
-    private static final int RUNNINGTHRESHOLD = 29;
-
+    private static final String TAG = "SD";
+    private static final int WALKINGTHRESHOLD = 5;
+    private static final int JOGGINGTHRESHOLD = 12;
+    private static final int RUNNINGTHRESHOLD = 23;
+    private static final int SIZEOFLISTDATA = 50;
+    private static final int DURATIONOFSTEP = 500;
+    private static final float ALPHA = 0.8f;
+    private float[] gravity = {0.0f, 0.0f, 9.8f};
+    private Context context;
     private StepListener stepListener;
 
     private ArrayList<AccelerationData> accelerationDataList;
     private ArrayList<AccelerationData> calculatedList;
 
-    public StepDetector() {
+    public StepDetector(Context context) {
+        this.context = context;
         accelerationDataList = new ArrayList<>();
         calculatedList = new ArrayList<>();
     }
@@ -33,7 +43,7 @@ public class StepDetector {
     public void AddAccelerationData(AccelerationData newAccelerationData){
         accelerationDataList.add(newAccelerationData);
 
-        if(accelerationDataList.size() >= 10){
+        if(accelerationDataList.size() >= SIZEOFLISTDATA){
             HandleAccelerationData();
         }
     }
@@ -47,13 +57,15 @@ public class StepDetector {
      * the array lists are emptied again so that they can be used again.
      */
     private void HandleAccelerationData(){
+        LogToFile.log(context, TAG, "List data: ");
         for (int i = 0; i < accelerationDataList.size(); i++) {
             AccelerationData accelerationData = accelerationDataList.get(i);
             accelerationData = CalculateValueAndTime(accelerationData);
             calculatedList.add(accelerationData);
         }
-
+        LogToFile.log(context, TAG,"List high point: ");
         ArrayList<AccelerationData> highPointList = FindHighPoints();
+        LogToFile.log(context, TAG,"Remove near high point: ");
         highPointList = RemoveNearHighPoints(highPointList);
         ExamineStepTypeAndSendResponse(highPointList);
 
@@ -67,14 +79,28 @@ public class StepDetector {
      * @return accelerationData: The object with changed values.
      */
     private AccelerationData CalculateValueAndTime(AccelerationData accelerationData){
-
+        // Get acceleration data
         float x = accelerationData.GetX();
         float y = accelerationData.GetY();
         float z = accelerationData.GetZ();
 
+        // Gravity filter
+        gravity[0] = ALPHA * gravity[0] + (1 - ALPHA) * x;
+        gravity[1] = ALPHA * gravity[1] + (1 - ALPHA) * y;
+        gravity[2] = ALPHA * gravity[2] + (1 - ALPHA) * z;
+
+        // Recalculate acceleration data with gravity filter
+        x = x - gravity[0];
+        y = y - gravity[1];
+        z = z - gravity[2];
+        //LogToFile.log(context, TAG,"gravity = " + String.format("%.2f", gravity[0]) + String.format(" %.2f", gravity[1]) + String.format(" %.2f", gravity[2]));
+        //gravity = new float[]{0.0f, 0.0f, 0.0f};
         double vectorLength = Math.sqrt(x * x + y * y + z * z);
         accelerationData.SetValue(vectorLength);
+        if (vectorLength > 1){
+            LogToFile.log(context, TAG,"value = " + String.format("%.2f", vectorLength));
 
+        }
         long time = accelerationData.GetTime();
         long timeOffsetToUnix = System.currentTimeMillis() - SystemClock.elapsedRealtime();
         long unixTimestamp = (time / 1000000L) + timeOffsetToUnix;
@@ -100,6 +126,7 @@ public class StepDetector {
             } else {
                 if(wasAboveThreshold && aboveWalkingThresholdList.size() > 0){
                     Collections.sort(aboveWalkingThresholdList, new AccelerationDataSorter());
+                    LogToFile.log(context, TAG,"high point: " + aboveWalkingThresholdList.get(aboveWalkingThresholdList.size() - 1).GetValue());
                     highPointList.add(aboveWalkingThresholdList.get(aboveWalkingThresholdList.size() - 1));
                     aboveWalkingThresholdList.clear();
                 }
@@ -110,16 +137,15 @@ public class StepDetector {
     }
     /**
      * The RemoveNearHighPoints method goes through the ArrayList accelerationData with the highest points
-     * and checks whether there is another "highest peak" within 400 milliseconds.
+     * and checks whether there is another "highest peak" within DURATIONOFSTEP(500) milliseconds.
      * If so, the smaller of the two is removed from the list.
      * @param accelerationDataList The list of high points as an ArrayList
-     * @return An ArrayList with the removed high points within 400 milliseconds
+     * @return An ArrayList with the removed high points within DURATIONOFSTEP(500) milliseconds
      */
     private ArrayList<AccelerationData> RemoveNearHighPoints(ArrayList<AccelerationData> accelerationDataList){
         ArrayList<Integer> wrongHighPointIndexes = new ArrayList<>();
-        int timeCheck = 400;
         for (int i = 0; i < accelerationDataList.size() - 1; i++) {
-            if((accelerationDataList.get(i + 1).GetTime() - accelerationDataList.get(i).GetTime()) < timeCheck){
+            if(((accelerationDataList.get(i + 1).GetTime() - accelerationDataList.get(i).GetTime()) < DURATIONOFSTEP)/* || ((accelerationDataList.get(i + 1).GetValue() - accelerationDataList.get(i).GetValue())) < WALKINGTHRESHOLD*/){
                 if(accelerationDataList.get(i + 1).GetValue() < accelerationDataList.get(i).GetValue()){
                     wrongHighPointIndexes.add(i + 1);
                 } else {
@@ -128,7 +154,7 @@ public class StepDetector {
             }
         }
         for (int i = wrongHighPointIndexes.size() - 1; i >= 0; i--) {
-            //System.out.println(i);
+            LogToFile.log(context, TAG, "Remove: " + i + accelerationDataList.get(i).GetValue());
             accelerationDataList.remove(i);
         }
         return accelerationDataList;

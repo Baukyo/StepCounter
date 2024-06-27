@@ -1,5 +1,7 @@
 package com.example.stepcounter;
 
+import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -20,8 +22,8 @@ import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, StepListener{
 
-    private TextView tvStepCounter, tvAcivityType;
-    private Button btnStart, btnStop, btnFinish;
+    private TextView tvJoggingCounter, tvAcivityType,tvRunningCounter, tvWalkingCounter;
+    private Button btnStart, btnStop, btnFinish,btnGuiline;
 
     private SensorManager sensorManager;
     private Sensor accelerometerSensor;
@@ -33,7 +35,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private int amountOfStepRunning = 0;
     private int amountOfStepJogging = 0;
     private int amountOfStepWalking = 0;
-
+    private boolean isStop = false;
+	
+    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -46,11 +50,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         });
 
         tvAcivityType = (TextView) findViewById(R.id.tv_ActivityType);
-        tvStepCounter = (TextView) findViewById(R.id.tv_StepCounter);
+        tvJoggingCounter = (TextView) findViewById(R.id.tv_JoggingCounter);
+        tvWalkingCounter = findViewById(R.id.tv_WalkingCounter);
+        tvRunningCounter = findViewById(R.id.tv_RunningCounter);
         btnStart = (Button) findViewById(R.id.btn_Start);
         btnStop = (Button) findViewById(R.id.btn_Stop);
         btnFinish = (Button) findViewById(R.id.btn_Finish);
-
+        btnGuiline = findViewById(R.id.btn_guiline);
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         if (sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
             accelerometerSensor = (Sensor) sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -69,11 +75,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         btnStart.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Toast.makeText(getBaseContext(), "btn Start", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getBaseContext(), "Starting!", Toast.LENGTH_SHORT).show();
+
+                isStop = false;
                 if (sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
                     accelerometerSensor = (Sensor) sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
                     //sensorManager.registerListener(this, accelerometerSensor, sensorManager.SENSOR_DELAY_UI);
                     isAccelerometerSensorPresent = true;
+
                 } else {
                     Toast.makeText(getBaseContext(), "There is no Accelerometer sensor!!!", Toast.LENGTH_SHORT).show();
                     isAccelerometerSensorPresent = false;
@@ -81,15 +90,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 }
                 sensorManager.registerListener(sensorEventListener, accelerometerSensor, sensorManager.SENSOR_DELAY_UI);
                 accelerationDataArrayList = new ArrayList<>();
-                stepDetector = new StepDetector();
+                stepDetector = new StepDetector(getBaseContext());
                 stepDetector.RegisterStepListener(stepListener);
+                btnStart.setEnabled(false);
+                btnStop.setEnabled(true);
+                btnFinish.setEnabled(true);
             }
         });
 
         btnStop.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-
+                isStop = true;
+                Toast.makeText(MainActivity.this, "Stopping!", Toast.LENGTH_SHORT).show();
+                btnStart.setText("Continue");
+                btnStop.setEnabled(false);
+                btnStart.setEnabled(true);
             }
         });
 
@@ -97,12 +113,28 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             @Override
             public void onClick(View v) {
                 sensorManager.unregisterListener(sensorEventListener);
-                accelerationDataArrayList.clear();
+                //accelerationDataArrayList.clear();
+                isStop = true;
+                amountOfStepRunning = 0;
+                amountOfStepJogging = 0;
+                amountOfStepWalking = 0;
+                tvWalkingCounter.setText("Walking: " + amountOfStepWalking);
+                tvJoggingCounter.setText("Jogging: " + amountOfStepJogging);
+                tvRunningCounter.setText("Running: " + amountOfStepRunning);
+                btnStart.setText("Start");
+                btnFinish.setEnabled(false);
+                btnStart.setEnabled(true);
 
             }
         });
+        btnGuiline.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MainActivity.this, Guilines.class);
+                startActivity(intent);
+            }
+        });
     }
-
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event != null) {
@@ -114,7 +146,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             if (newAccelerationData != null && stepDetector != null) {
                 accelerationDataArrayList.add(newAccelerationData);
-                stepDetector.AddAccelerationData(newAccelerationData);
+                if (isStop == false) {
+                    stepDetector.AddAccelerationData(newAccelerationData);
+                }
             }
 
         }
@@ -162,9 +196,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 activityType = "Stationary";
                 break;
         }
-        tvAcivityType.setText(accelerationData.GetValue() + "");
-        tvStepCounter.setText(amountOfStepWalking + "");
-
+        tvAcivityType.setText(activityType+"");
+        tvWalkingCounter.setText("Walking: " + amountOfStepWalking);
+        tvJoggingCounter.setText("Jogging: " + amountOfStepJogging);
+        tvRunningCounter.setText("Running: " + amountOfStepRunning);
         /*mViewModel.setAmountOfSteps(mViewModel.getAmountOfSteps() + 1);
         textView_amount_steps.setText(String.valueOf(mViewModel.getAmountOfSteps()));
         if(stepType == StepType.WALKING) {
